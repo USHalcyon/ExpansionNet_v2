@@ -1,52 +1,42 @@
 __author__ = 'tylin'
-from eval.tokenizer.ptbtokenizer import PTBTokenizer
-from eval.bleu.bleu import Bleu
-from eval.meteor.meteor import Meteor
-from eval.rouge.rouge import Rouge
-from eval.cider.cider import Cider
-from eval.spice.spice import Spice
+from .tokenizer.ptbtokenizer import PTBTokenizer
+from .bleu.bleu import Bleu
+from .meteor.meteor import Meteor
+from .rouge.rouge import Rouge
+from .cider.cider import Cider
+from .spice.spice import Spice
 
 
-"""
-I do not own the rights of this code, I just  modified it according to my needs.
-The original version can be found in:
-https://github.com/cocodataset/cocoapi
-"""
 class COCOEvalCap:
-    def __init__(self, dataset_gts_anns, pred_anns, pred_img_ids, get_stanford_models_path=None):
+    def __init__(self, coco, cocoRes):
         self.evalImgs = []
         self.eval = {}
         self.imgToEval = {}
-        self.dataset_gts_anns = dataset_gts_anns
-        self.pred_anns = pred_anns
-        self.pred_img_ids = pred_img_ids
+        self.coco = coco
+        self.cocoRes = cocoRes
+        self.params = {'image_id': coco.getImgIds()}
 
-        import subprocess
-        # print("invoking " + str(get_stanford_models_path))
-        rc = subprocess.call(get_stanford_models_path)
-
-    def evaluate(self, bleu=True, rouge=True, cider=True, spice=True, meteor=True, verbose=True):
+    def evaluate(self, bleu=True, rouge=True, cider=True, spice=True, meteor=True):
+        imgIds = self.params['image_id']
         # imgIds = self.coco.getImgIds()
         gts = {}
         res = {}
-        for imgId in self.pred_img_ids:
-            gts[imgId] = self.dataset_gts_anns[imgId]
-            res[imgId] = self.pred_anns[imgId]
+        for imgId in imgIds:
+            gts[imgId] = self.coco.imgToAnns[imgId]
+            res[imgId] = self.cocoRes.imgToAnns[imgId]
 
         # =================================================
         # Set up scorers
         # =================================================
-        #if verbose:
-        #    print('tokenization...')
+        print('tokenization...')
         tokenizer = PTBTokenizer()
-        gts = tokenizer.tokenize(gts)
+        gts  = tokenizer.tokenize(gts)
         res = tokenizer.tokenize(res)
 
         # =================================================
         # Set up scorers
         # =================================================
-        #if verbose:
-        #    print('setting up scorers...')
+        print('setting up scorers...')
         scorers = []
         if cider:
             scorers.append((Cider(), "CIDEr"))
@@ -58,43 +48,23 @@ class COCOEvalCap:
             scorers.append((Spice(), "SPICE"))
         if meteor:
             scorers.append((Meteor(), "METEOR"))
-        """
-        scorers = [
-            (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
-            (Rouge(), "ROUGE_L"),
-            (Cider(), "CIDEr"),
-            (Spice(), "SPICE"),
-            (Meteor(), "METEOR"),
-        ]
-        """
 
         # =================================================
         # Compute scores
         # =================================================
-        return_scores = []
         for scorer, method in scorers:
-            if verbose:
-                # print('computing %s score...'%(scorer.method()))
-                pass
+            print('computing %s score...'%(scorer.method()))
             score, scores = scorer.compute_score(gts, res)
             if type(method) == list:
                 for sc, scs, m in zip(score, scores, method):
                     self.setEval(sc, m)
                     self.setImgToEvalImgs(scs, gts.keys(), m)
-                    if verbose:
-                        # print("%s: %0.3f"%(m, sc))
-                        pass
-                    return_scores.append((m, round(sc, 4)))
+                    print("%s: %0.3f"%(m, sc))
             else:
                 self.setEval(score, method)
                 self.setImgToEvalImgs(scores, gts.keys(), method)
-                if verbose:
-                    # print("%s: %0.3f"%(method, score))
-                    pass
-                return_scores.append((method, round(score, 4)))
+                print("%s: %0.3f"%(method, score))
         self.setEvalImgs()
-
-        return return_scores
 
     def setEval(self, score, method):
         self.eval[method] = score
